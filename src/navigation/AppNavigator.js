@@ -12,8 +12,10 @@ import PartnerScreen from '../screens/PartnerScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import { colors } from '../theme/colors';
 import { supabase } from '../lib/supabase';
+import { ensureProfile } from '../lib/ensureProfile';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -71,15 +73,25 @@ function AuthStack() {
 export default function AppNavigator() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [onboarded, setOnboarded] = useState(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
+      if (session?.user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('sobriety_date, onboarded')
+          .eq('id', session.user.id)
+          .single();
+        setOnboarded(data?.onboarded || false);
+      }
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user) ensureProfile(session.user);
     });
 
     return () => subscription.unsubscribe();
@@ -93,9 +105,22 @@ export default function AppNavigator() {
     );
   }
 
+  async function completeOnboarding() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ onboarded: true }).eq('id', user.id);
+    }
+    setOnboarded(true);
+  }
+
   return (
     <NavigationContainer>
-      {session ? <MainTabs /> : <AuthStack />}
+      {!session
+        ? <AuthStack />
+        : !onboarded
+        ? <OnboardingScreen onComplete={completeOnboarding} />
+        : <MainTabs />
+      }
     </NavigationContainer>
   );
 }
