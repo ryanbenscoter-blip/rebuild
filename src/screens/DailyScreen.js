@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,74 +6,104 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { supabase } from '../lib/supabase';
 
-const DAILY_CONTENT = [
-  {
-    id: '1',
-    date: 'Today',
-    title: 'The hardest part is starting.',
-    body: "Everyone wants to be sober. Nobody wants to go through getting sober. That gap — between wanting it and doing it — that's where most people get stuck.\n\nBut here's what I learned: you don't have to cross the whole gap today. You just have to take one step into it.\n\nToday's step: just don't drink today. That's it. Not forever. Not next week. Just today.\n\nI did it one day at a time. You can too.",
-    type: 'message',
-    readTime: '2 min read',
-    liked: false,
-  },
-  {
-    id: '2',
-    date: 'Yesterday',
-    title: 'What to do when a craving hits hard.',
-    body: "Cravings feel like they'll last forever. They don't. Research shows the average craving peaks and passes within 15-20 minutes if you don't feed it.\n\nMy personal toolkit when it gets bad:\n\n1. Change your location immediately. Go outside, drive somewhere, anything.\n2. Call someone — anyone. Even just to talk about nothing.\n3. Do something physical. Even 20 pushups breaks the mental loop.\n4. Remind yourself: this feeling is not permanent.\n\nThe craving is lying to you. It always passes.",
-    type: 'message',
-    readTime: '3 min read',
-    liked: false,
-  },
-  {
-    id: '3',
-    date: '2 days ago',
-    title: 'Why I actually got sober.',
-    body: "It wasn't for my health. It wasn't for my family. It wasn't because I hit rock bottom.\n\nI got sober because I was exhausted. Exhausted from managing everything around drinking. The planning, the hiding, the recovering, the guilt.\n\nDrinking was a full time job I hated.\n\nWhen I finally stopped, I didn't just lose the drinking. I got back all that energy. All that time. All that mental space.\n\nThat's what nobody tells you about sobriety. You don't just stop losing things. You start getting things back.",
-    type: 'message',
-    readTime: '2 min read',
-    liked: true,
-  },
-];
+const ADMIN_ID = '66d349da-6b31-4789-9402-7407b9d03ae0';
 
 const DAILY_CHALLENGES = [
   { id: 'c1', text: 'Write down 3 things you\'re grateful for today', done: false },
   { id: 'c2', text: 'Reach out to one person in your life', done: false },
-  { id: 'c3', text: 'Do 10 minutes of movement', done: true },
+  { id: 'c3', text: 'Do 10 minutes of movement', done: false },
 ];
 
-export default function DailyScreen() {
-  const [posts, setPosts] = useState(DAILY_CONTENT);
+export default function DailyScreen({ navigation }) {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
   const [challenges, setChallenges] = useState(DAILY_CHALLENGES);
-  const [expandedId, setExpandedId] = useState('1');
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  function toggleLike(id) {
-    setPosts(posts.map(p => p.id === id ? { ...p, liked: !p.liked } : p));
+  useEffect(() => {
+    checkAdmin();
+    fetchPosts();
+  }, []);
+
+  async function checkAdmin() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id === ADMIN_ID) setIsAdmin(true);
+  }
+
+  async function fetchPosts() {
+    const { data, error } = await supabase
+      .from('daily_posts')
+      .select('*')
+      .order('post_date', { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      setPosts(data);
+      if (data.length > 0) setExpandedId(data[0].id);
+    }
+    setLoading(false);
+    setRefreshing(false);
   }
 
   function toggleChallenge(id) {
     setChallenges(challenges.map(c => c.id === id ? { ...c, done: !c.done } : c));
   }
 
+  function formatDate(dateString) {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
   const completedCount = challenges.filter(c => c.done).length;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.accent} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-
-        {/* Header */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPosts(); }} tintColor={colors.accent} />}
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>DAILY</Text>
             <Text style={styles.subtitle}>From Ryan, every single day.</Text>
           </View>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={styles.streakText}>Day {new Date().getDate()}</Text>
+          <View style={styles.headerRight}>
+            {isAdmin && (
+              <TouchableOpacity
+                style={styles.adminButton}
+                onPress={() => navigation.navigate('AdminPost')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={20} color={colors.white} />
+                <Text style={styles.adminButtonText}>Post</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -100,55 +130,48 @@ export default function DailyScreen() {
           ))}
         </View>
 
-        {/* Ryan's Messages */}
+        {/* Ryan's Posts */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>FROM RYAN</Text>
-          {posts.map(post => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.postCard}
-              onPress={() => setExpandedId(expandedId === post.id ? null : post.id)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.postHeader}>
-                <View style={styles.ryanAvatar}>
-                  <Text style={styles.ryanAvatarText}>R</Text>
-                </View>
-                <View style={styles.postMeta}>
-                  <Text style={styles.postTitle}>{post.title}</Text>
-                  <Text style={styles.postDate}>{post.date} · {post.readTime}</Text>
-                </View>
-                <Ionicons
-                  name={expandedId === post.id ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={colors.muted}
-                />
-              </View>
 
-              {expandedId === post.id && (
-                <View style={styles.postBody}>
-                  <Text style={styles.postContent}>{post.body}</Text>
-                  <TouchableOpacity
-                    style={styles.likeRow}
-                    onPress={() => toggleLike(post.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={post.liked ? 'heart' : 'heart-outline'}
-                      size={20}
-                      color={post.liked ? colors.accent : colors.muted}
-                    />
-                    <Text style={[styles.likeText, post.liked && styles.likeTextActive]}>
-                      {post.liked ? 'This helped me' : 'This helped me'}
-                    </Text>
-                  </TouchableOpacity>
+          {posts.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Ryan's first post is coming soon.</Text>
+              <Text style={styles.emptySubtext}>Check back tomorrow.</Text>
+            </View>
+          ) : (
+            posts.map(post => (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.postCard}
+                onPress={() => setExpandedId(expandedId === post.id ? null : post.id)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.postHeader}>
+                  <View style={styles.ryanAvatar}>
+                    <Text style={styles.ryanAvatarText}>R</Text>
+                  </View>
+                  <View style={styles.postMeta}>
+                    <Text style={styles.postTitle}>{post.title}</Text>
+                    <Text style={styles.postDate}>{formatDate(post.post_date)}</Text>
+                  </View>
+                  <Ionicons
+                    name={expandedId === post.id ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={colors.muted}
+                  />
                 </View>
-              )}
-            </TouchableOpacity>
-          ))}
+
+                {expandedId === post.id && (
+                  <View style={styles.postBody}>
+                    <Text style={styles.postContent}>{post.body}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
-        {/* Bottom encouragement */}
         <View style={styles.encouragement}>
           <Text style={styles.encouragementText}>
             "You survived every bad day so far. Your record is 100%."
@@ -164,35 +187,26 @@ export default function DailyScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { padding: 20, paddingBottom: 40 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.white,
-    letterSpacing: 4,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-    letterSpacing: 1,
-  },
-  streakBadge: {
-    backgroundColor: colors.surface,
+  title: { fontSize: 24, fontWeight: '900', color: colors.white, letterSpacing: 4 },
+  subtitle: { fontSize: 12, color: colors.muted, marginTop: 2, letterSpacing: 1 },
+  headerRight: { flexDirection: 'row', gap: 10 },
+  adminButton: {
+    backgroundColor: colors.accent,
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 6,
   },
-  streakEmoji: { fontSize: 18 },
-  streakText: { color: colors.white, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  adminButtonText: { color: colors.white, fontWeight: '800', fontSize: 13 },
   section: { marginBottom: 28 },
   sectionHeader: {
     flexDirection: 'row',
@@ -205,13 +219,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.accent,
     letterSpacing: 3,
-    marginBottom: 12,
   },
-  sectionMeta: {
-    fontSize: 12,
-    color: colors.muted,
-    marginBottom: 12,
-  },
+  sectionMeta: { fontSize: 12, color: colors.muted },
   challengeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -232,19 +241,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxDone: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  challengeText: {
-    color: colors.white,
-    fontSize: 14,
-    flex: 1,
-  },
-  challengeTextDone: {
-    color: colors.muted,
-    textDecorationLine: 'line-through',
-  },
+  checkboxDone: { backgroundColor: colors.accent, borderColor: colors.accent },
+  challengeText: { color: colors.white, fontSize: 14, flex: 1 },
+  challengeTextDone: { color: colors.muted, textDecorationLine: 'line-through' },
   postCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -253,11 +252,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
+  postHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   ryanAvatar: {
     width: 40,
     height: 40,
@@ -266,50 +261,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ryanAvatarText: {
-    color: colors.white,
-    fontWeight: '900',
-    fontSize: 18,
-  },
+  ryanAvatarText: { color: colors.white, fontWeight: '900', fontSize: 18 },
   postMeta: { flex: 1 },
-  postTitle: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  postDate: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 2,
-  },
+  postTitle: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  postDate: { color: colors.muted, fontSize: 12, marginTop: 2 },
   postBody: {
     marginTop: 14,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: 14,
   },
-  postContent: {
-    color: colors.white,
-    fontSize: 15,
-    lineHeight: 24,
-  },
-  likeRow: {
-    flexDirection: 'row',
+  postContent: { color: colors.white, fontSize: 15, lineHeight: 24 },
+  emptyCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  likeText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  likeTextActive: {
-    color: colors.accent,
-  },
+  emptyText: { color: colors.white, fontWeight: '700', fontSize: 16 },
+  emptySubtext: { color: colors.muted, fontSize: 13, marginTop: 6 },
   encouragement: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -325,10 +297,5 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 22,
   },
-  encouragementAuthor: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 8,
-  },
+  encouragementAuthor: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: 8 },
 });

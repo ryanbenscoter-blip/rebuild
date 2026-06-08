@@ -13,6 +13,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import AdminPostScreen from '../screens/AdminPostScreen';
 import { colors } from '../theme/colors';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/ensureProfile';
@@ -20,7 +21,7 @@ import { ensureProfile } from '../lib/ensureProfile';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function MainTabs() {
+function TabNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -58,6 +59,15 @@ function MainTabs() {
       <Tab.Screen name="Partner" component={PartnerScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+  );
+}
+
+function MainTabs() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Tabs" component={TabNavigator} />
+      <Stack.Screen name="AdminPost" component={AdminPostScreen} />
+    </Stack.Navigator>
   );
 }
 
