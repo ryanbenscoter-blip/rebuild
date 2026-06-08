@@ -6,12 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Modal,
 } from 'react-native';
 import { colors } from '../theme/colors';
+import SOSScreen from './SOSScreen';
 import { getSobrietyStats, getNextMilestone } from '../utils/sobriety';
 
 export default function HomeScreen() {
   const [stats, setStats] = useState(getSobrietyStats());
+  const [sosVisible, setSosVisible] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -78,9 +81,13 @@ export default function HomeScreen() {
         </View>
 
         {/* SOS Button */}
-        <TouchableOpacity style={styles.sosButton} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.sosButton} activeOpacity={0.8} onPress={() => setSosVisible(true)}>
           <Text style={styles.sosText}>I NEED SUPPORT RIGHT NOW</Text>
         </TouchableOpacity>
+
+        <Modal visible={sosVisible} animationType="slide" onRequestClose={() => setSosVisible(false)}>
+          <SOSScreen onClose={() => setSosVisible(false)} />
+        </Modal>
 
         {/* Daily Pledge */}
         <TouchableOpacity style={styles.pledgeButton} activeOpacity={0.8}>
