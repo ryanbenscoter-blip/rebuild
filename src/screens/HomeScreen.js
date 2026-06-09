@@ -10,11 +10,21 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import SOSScreen from './SOSScreen';
+import BodyRecovery from '../components/BodyRecovery';
+import CravingTracker from '../components/CravingTracker';
 import { getSobrietyStats, getNextMilestone } from '../utils/sobriety';
+import { supabase } from '../lib/supabase';
 
 export default function HomeScreen() {
   const [stats, setStats] = useState(getSobrietyStats());
   const [sosVisible, setSosVisible] = useState(false);
+  const [userId, setUserId] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -79,6 +89,12 @@ export default function HomeScreen() {
             <Text style={styles.statLabel}>Est. Saved</Text>
           </View>
         </View>
+
+        {/* Body Recovery */}
+        <BodyRecovery totalDays={stats.totalDays} />
+
+        {/* Craving Tracker */}
+        <CravingTracker userId={userId} />
 
         {/* SOS Button */}
         <TouchableOpacity style={styles.sosButton} activeOpacity={0.8} onPress={() => setSosVisible(true)}>
